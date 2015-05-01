@@ -271,8 +271,8 @@ public class MappingProcessor implements Mapper {
   /**
    * Perform mapping of a field.
    * Uses {@link #mapFromFieldMap(Object, Object, Object, FieldMap)} to do the real work, unless
-   * if iterate, where {@link #mapFromIterateMethodFieldMap(Object, Object, Object, FieldMap)} is used. 
-   * 
+   * if iterate, where {@link #mapFromIterateMethodFieldMap(Object, Object, Object, FieldMap)} is used.
+   *
    * @param fieldMapping Field mapping.
    * @param srcObj Source object.
    * @param destObj Destination object.
@@ -593,21 +593,57 @@ public class MappingProcessor implements Mapper {
         result.clear();
       }
     }
+    Class<?> keyDstClass =null;
+    Class<?> valueDstClass =null;
+    FieldMap keyMap = (FieldMap) fieldMap.clone();
+    FieldMap valueMap = (FieldMap) fieldMap.clone();
+    HintContainer destHintContainer = fieldMap.getDestHintContainer();
+    HintContainer srcHintContainer = fieldMap.getSrcHintContainer();
+
+    List<Class<?>> destHints = destHintContainer!=null ? destHintContainer.getHints(): null;
+    List<Class<?>> srcHints = srcHintContainer!=null ? srcHintContainer.getHints(): null;
+    if(destHints != null && destHints.size() == 2){
+      HintContainer valueDestHints = new HintContainer();
+      valueDestHints.setHintName("");
+      HintContainer keyDestHints = new HintContainer();
+      keyDestHints.setHintName("");
+      keyMap.setDestHintContainer(keyDestHints);
+      keyDestHints.getHints().add(destHintContainer.getHint(0));
+      valueDestHints.getHints().add(destHintContainer.getHint(1));
+      valueMap.setDestHintContainer(valueDestHints);
+      keyDstClass = destHints.get(0);
+    } else {
+      keyMap.setDestHintContainer(null);
+    }
+    if(srcHints != null && srcHints.size() == 2){
+      HintContainer valueSrcHints = new HintContainer();
+      valueSrcHints.setHintName("");
+      HintContainer keySrcHints = new HintContainer();
+      keySrcHints.setHintName("");
+      keySrcHints.getHints().add(srcHintContainer.getHint(0));
+      valueSrcHints.getHints().add(srcHintContainer.getHint(1));
+      valueMap.setSrcHintContainer(valueSrcHints);
+      keyMap.setSrcHintContainer(keySrcHints);
+    } else{
+      keyMap.setSrcHintContainer(null);
+    }
 
     for (Entry<?, Object> srcEntry : ((Map<?, Object>) srcMapValue).entrySet()) {
+      Object srcEntryKey = srcEntry.getKey();
       Object srcEntryValue = srcEntry.getValue();
+      Object destKeyValue = mapOrRecurseObject(srcObj, srcEntryKey,  keyDstClass != null ? keyDstClass : srcEntryKey.getClass(), keyMap , destObj);
 
       if (srcEntryValue == null) { // overwrites with null in any case
-        result.put(srcEntry.getKey(), null);
+        result.put(destKeyValue, null);
         continue;
       }
 
-      Object destEntryValue = mapOrRecurseObject(srcObj, srcEntryValue, srcEntryValue.getClass(), fieldMap, destObj);
-      Object obj = result.get(srcEntry.getKey());
+      Object destEntryValue = mapOrRecurseObject(srcObj, srcEntryValue,  srcEntryValue.getClass(),  valueMap != null ? valueMap : fieldMap, destObj);
+      Object obj = result.get(destKeyValue);
       if (obj != null && obj.equals(destEntryValue) && fieldMap.isNonCumulativeRelationship()) {
         mapToDestObject(null, srcEntryValue, obj, false, null);
       } else {
-        result.put(srcEntry.getKey(), destEntryValue);
+        result.put(destKeyValue, destEntryValue);
       }
     }
     return result;
@@ -617,7 +653,7 @@ public class MappingProcessor implements Mapper {
     Class destEntryType = fieldMap.getDestFieldType(destObj.getClass()).getComponentType();
     Class srcEntryType = srcCollectionValue.getClass().getComponentType();
     int size = Array.getLength(srcCollectionValue);
-    
+
     CopyByReferenceContainer copyByReferences = globalConfiguration.getCopyByReferences();
     boolean isPrimitiveArray = CollectionUtils.isPrimitiveArray(srcCollectionValue.getClass());
     boolean isFinal = Modifier.isFinal(srcEntryType.getModifiers());
@@ -670,7 +706,7 @@ public class MappingProcessor implements Mapper {
           fieldMapping.getDestFieldName(), srcFieldValue, null, fieldMapping.getClassMap().getMapId()));
     }
   }
-  
+
   private Object addArrayContentCopy(FieldMap fieldMap, int size, Object srcCollectionValue, Object destObj,
           Class destEntryType) {
       Object result;
@@ -1035,7 +1071,7 @@ public class MappingProcessor implements Mapper {
     List<Class<?>> superSrcClasses = MappingUtils.getSuperClassesAndInterfaces(srcClass);
     List<Class<?>> superDestClasses = MappingUtils.getSuperClassesAndInterfaces(destClass);
 
-    // add the actual classes to check for mappings between the original and the opposite 
+    // add the actual classes to check for mappings between the original and the opposite
     // super classes
     superSrcClasses.add(0, srcClass);
     superDestClasses.add(0, destClass);
